@@ -33,8 +33,8 @@ int main(int argc, char *argv[]) {
       // calling process to wait.
   }
 
-  if(access(FIFO_NAME, F_OK) == -1) {  // if FIFO DNE
-    res = mkfifo(FIFO_NAME, 0777);  // create named pipe and give it full perm
+  if(access(FIFO_NAME, F_OK) == -1) {  // if FIFO DNE //ถ้าท่อเคยมีอยู่ ==> return -1
+    res = mkfifo(FIFO_NAME, 0777);  // create named pipe and give it full perm //make FIFO ==> สร้าง FIFO ขึ้นมาใหม่
     if (res) {
       fprintf(stderr, "Could not create fifo %s\n", FIFO_NAME);
       exit(EXIT_FAILURE);
@@ -49,6 +49,6 @@ int main(int argc, char *argv[]) {
 
   if (res != -1) (void)close(res);
   printf("Process %d finished\n", getpid());
-  unlink(FIFO_NAME);  // unlink the named pipe
+  unlink(FIFO_NAME);  // unlink the named pipe //ทำลายท่อกรณีไม่ต้องการให้คนอื่นใช้ แต่ถ้าอยากทิ้งไว้ให้คนอื่นใช้ ก็ไม่ต้องเขียนตัวนี้
   exit(EXIT_SUCCESS);
 }

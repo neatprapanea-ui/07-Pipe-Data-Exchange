@@ -8,6 +8,7 @@ int main(void) {
   char buffer[BUFSIZ + 1];
   int chars_read;
 
+  printf("BUFSIZ = %d\n",BUFSIZ);
   memset(buffer, '\0', sizeof(buffer));
   read_fp = popen("uname -a", "r");  
   // uname -a -> OS name with details such as version, release date, hardware name and processor type.
