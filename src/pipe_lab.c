@@ -6,6 +6,7 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <stdlib.h>
 
 /*
  * Task A – one-way pipe
@@ -30,6 +31,10 @@
  *   5. print "parent: sent ping"
  */
 int task_one_way(void) {
+    char buffer[BUFSIZ + 1];
+    int n_bytes;
+    char data[] = "ping";
+
     int fd[2];
     if (pipe(fd) == -1) { perror("pipe"); return 1; }
 
@@ -38,15 +43,28 @@ int task_one_way(void) {
 
     if (pid == 0) {
         /* TODO: implement child logic (steps 1-4 above) */
-        (void)fd;
-        fprintf(stderr, "TODO: task_one_way child not implemented\n");
-        return 1;
+        close (fd[1]);
+        n_bytes = read(fd[0], buffer, BUFSIZ); //อ่านจำนวนไบต์
+        if(n_bytes > 0)
+        {
+            buffer[n_bytes] = '\0'; //ปิดท้ายสตริง
+            printf("child received: %s\n", buffer); //แสดงผล
+            fflush(stdout);
+        }
+        close (fd[0]);
+        exit(0);
     }
 
     /* TODO: implement parent logic (steps 1-5 above) */
-    (void)fd;
-    fprintf(stderr, "TODO: task_one_way parent not implemented\n");
-    return 1;
+    int stat_val;
+    close (fd[0]);
+    write(fd[1], data, strlen(data));
+    close (fd[1]);
+    waitpid(pid, &stat_val, 0);
+    printf("parent: sent %s\n", data);
+    fflush(stdout);
+
+    return 0;
 }
 
 /*
@@ -75,15 +93,46 @@ int task_two_way(void) {
 
     if (pid == 0) {
         /* TODO: implement child logic */
-        (void)p2c; (void)c2p;
-        fprintf(stderr, "TODO: task_two_way child not implemented\n");
-        return 1;
+        //child ใช้ p2c[0] อ่านจากแม่, c2p[1] ในการส่งให้แม่ ต้องปิดที่เหลือ
+        close (p2c[1]);
+        close (c2p[0]);
+        int child_val = 0;
+        int n_bytes = read(p2c[0], &child_val, sizeof(child_val));
+        if(n_bytes > 0) //ไม่ใช้ != 0 เพราะป้องกันการเกิด error (-1)
+        {
+            child_val *= 2;
+            printf("child computed: %d\n", child_val);
+            fflush(stdout);
+            write(c2p[1], &child_val, sizeof(child_val));
+        }
+        close (p2c[0]);
+        close (c2p[1]);
+
+        exit(0);
     }
 
     /* TODO: implement parent logic */
-    (void)p2c; (void)c2p;
-    fprintf(stderr, "TODO: task_two_way parent not implemented\n");
-    return 1;
+    int stat_val;
+    int parent_val = 21; 
+    int val_from_c = 0;
+
+    //parent ใช้ p2c[1] ส่งให้ลูก และ c2p[0] รับค่าจากลูก
+    close (p2c[0]);
+    close (c2p[1]);
+
+    write(p2c[1], &parent_val, sizeof(parent_val));
+    close (p2c[1]);
+
+    int n_bytes = read(c2p[0], &val_from_c, sizeof(val_from_c));
+    if(n_bytes > 0)
+    {
+        printf("parent received: %d\n", val_from_c);
+        fflush(stdout);
+    }
+    close (c2p[0]);
+    waitpid(pid, &stat_val, 0);
+
+    return 0;
 }
 
 /*
@@ -102,6 +151,11 @@ int task_two_way(void) {
  */
 int task_eof(void) {
     int fd[2];
+    char buffer [BUFSIZ + 1];
+    int n_bytes;
+    char text[] = "hello";
+    int stat_val;
+
     if (pipe(fd) == -1) { perror("pipe"); return 1; }
 
     pid_t pid = fork();
@@ -110,15 +164,28 @@ int task_eof(void) {
     if (pid == 0) {
         /* TODO: close fd[1], read in a loop until read() == 0,
                  print "child: got EOF after <n> bytes", close fd[0] */
-        (void)fd;
-        fprintf(stderr, "TODO: task_eof child not implemented\n");
-        return 1;
+        close (fd[1]);
+        int total_bytes = 0;
+
+        //อ่านคำว่า hello จบ loop มาอ่านอีกแต่ใน pipe ไม่มีข้อมูลเหลือให้อ่านแล้ว เลยออกจาก loop
+        while((n_bytes = read(fd[0], buffer, BUFSIZ)) > 0)
+        {
+            total_bytes += n_bytes;
+        }
+        printf("child: got EOF after %d bytes\n", total_bytes);
+        fflush(stdout);
+        close (fd[0]);
+
+        exit(0);
     }
 
     /* TODO: close fd[0], write "hello", close fd[1], waitpid */
-    (void)fd;
-    fprintf(stderr, "TODO: task_eof parent not implemented\n");
-    return 1;
+    close (fd[0]);
+    write(fd[1], text, strlen(text));
+    close (fd[1]);
+    waitpid(pid, &stat_val, 0);
+
+    return 0;
 }
 
 /*
@@ -145,6 +212,8 @@ int task_eof(void) {
 int task_broken_pipe(void) {
     int data_fd[2];
     int sync_fd[2];
+    char ack = '1';
+
     if (pipe(data_fd) == -1 || pipe(sync_fd) == -1) { perror("pipe"); return 1; }
 
     pid_t pid = fork();
@@ -152,18 +221,36 @@ int task_broken_pipe(void) {
 
     if (pid == 0) {
         /* TODO: implement child logic (see description above) */
-        (void)data_fd; (void)sync_fd;
-        fprintf(stderr, "TODO: task_broken_pipe child not implemented\n");
-        return 1;
+        close (data_fd[0]);
+        close (data_fd[1]);
+        close (sync_fd[0]);
+
+        write(sync_fd[1], &ack, 1);
+        close (sync_fd[1]);
+        exit(0);
     }
 
     /* TODO: implement parent logic (see description above) */
-    (void)data_fd; (void)sync_fd;
-    fprintf(stderr, "TODO: task_broken_pipe parent not implemented\n");
-    return 1;
+    int stat_val;
+    close (sync_fd[1]);
+    read(sync_fd[0], &ack, 1);
+    close (sync_fd[0]);
+    close (data_fd[0]);
+
+    signal(SIGPIPE, SIG_IGN); //เมินสัญญาณ
+    int ret = write(data_fd[1], "X", 1);
+    if(ret == -1 && errno == EPIPE)
+    {
+        printf("parent: broken pipe detected\n");
+        fflush(stdout);
+    }
+    close (data_fd[1]);
+
+    waitpid(pid, &stat_val, 0);
+    return 0;
 }
 
-/* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------*/
 int main(void) {
     if (task_one_way() != 0)     { fprintf(stderr, "task_one_way failed\n");     return 1; }
     if (task_two_way() != 0)     { fprintf(stderr, "task_two_way failed\n");     return 1; }
